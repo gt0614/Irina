@@ -1,0 +1,80 @@
+SELECT 	@@SERVERNAME as 'SQLServer',								
+ --   [sJOB].[job_id] AS [JobID]	,								
+   [sJOB].[name] AS [JobName]									
+    ,-- [sDBP].[name] AS [JobOwner]	, 								
+	l.name as [JobOwner]								
+    , [sCAT].[name] AS [JobCategory]									
+    , [sJOB].[description] AS [JobDescription]									
+    , CASE [sJOB].[enabled]									
+        WHEN 1 THEN 'Yes'									
+        WHEN 0 THEN 'No'									
+      END AS [IsEnabled]									
+    , [sJOB].[date_created] AS [JobCreatedOn]									
+    , [sJOB].[date_modified] AS [JobLastModifiedOn]									
+    , [sSVR].[name] AS [OriginatingServerName]									
+    , [sJSTP].[step_id] AS [JobStepNo]									
+    , [sJSTP].[step_name] AS [JobStepName]									
+    , CASE									
+        WHEN [sSCH].[schedule_uid] IS NULL THEN 'No'									
+        ELSE 'Yes'									
+      END AS [IsScheduled]									
+ --   , [sSCH].[schedule_uid] AS [JobScheduleID]									
+    , [sSCH].[name] AS [JobScheduleName]									
+  /*  , CASE [sJOB].[delete_level]									
+        WHEN 0 THEN 'Never'									
+        WHEN 1 THEN 'On Success'									
+        WHEN 2 THEN 'On Failure'									
+        WHEN 3 THEN 'On Completion'									
+      END AS [JobDeletionCriterion],	*/								
+	--  [sJSTP].subsystem,								
+	 , convert(datetime , convert(varchar,h.rundate), 112) as LastRunDate,								
+	  [sJSTP].command								
+	 								
+FROM									
+    [msdb].[dbo].[sysjobs] AS [sJOB]									
+    LEFT JOIN [msdb].[sys].[servers] AS [sSVR]									
+        ON [sJOB].[originating_server_id] = [sSVR].[server_id]									
+    LEFT JOIN [msdb].[dbo].[syscategories] AS [sCAT]									
+        ON [sJOB].[category_id] = [sCAT].[category_id]									
+    LEFT JOIN [msdb].[dbo].[sysjobsteps] AS [sJSTP]									
+        ON [sJOB].[job_id] = [sJSTP].[job_id]									
+     --   AND [sJOB].[start_step_id] = [sJSTP].[step_id]									
+    LEFT JOIN [msdb].[sys].[database_principals] AS [sDBP]									
+        ON [sJOB].[owner_sid] = [sDBP].[sid]									
+ LEFT JOIN master.dbo.syslogins L on l.sid=sjob.owner_sid									
+   									
+    LEFT JOIN [msdb].[dbo].[sysjobschedules] AS [sJOBSCH]									
+        ON [sJOB].[job_id] = [sJOBSCH].[job_id]									
+    LEFT JOIN [msdb].[dbo].[sysschedules] AS [sSCH]									
+        ON [sJOBSCH].[schedule_id] = [sSCH].[schedule_id]									
+	Left outer join 								
+									
+	(select job_id, max(run_date) as rundate  from [msdb].[dbo].[sysjobhistory]								
+	group by  job_id) h 								
+	on sjob.job_id=h.job_id								
+	where   [sJSTP].subsystem ='SSIS'								
+ORDER BY [JobName]									
+									
+									
+#NAME?									
+									
+									
+									
+select @@servername SQLServer, proj.project_id ProjectId, proj.name as ProjectName,									
+pack.name as PackageName, pack.description as PackageDescription,									
+proj.deployed_by_name as ProjectDeployedBy, proj.last_deployed_time as ProjectLastDeployedDate									
+									
+ from SSISDB.catalog.projects proj									
+ left outer join 									
+ SSISDB.catalog.packages pack on proj.project_id=pack.project_id									
+ order by 2, 3									
+									
+									
+select @@servername as SQLServerName,  ex.package_name, parameter_name, parameter_value									
+ from ( select package_name, max(execution_id) as executionid from SSISDB.catalog.executions									
+group by package_name) ex 									
+left outer join 									
+SSISDB.catalog.execution_parameter_values expar on ex.executionid=expar.execution_id									
+where expar.parameter_value is not null and parameter_data_type='String' and expar.parameter_value <>'' 									
+									
+									
